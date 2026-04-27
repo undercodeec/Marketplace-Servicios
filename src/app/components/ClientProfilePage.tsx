@@ -1,0 +1,410 @@
+import React, { useState, useEffect } from 'react';
+import { User, MapPin, Bell, Save, Plus, Trash2, Edit2, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { getCurrentAuth } from '@/services/authService';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+interface Address {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  isDefault: boolean;
+}
+
+export function ClientProfilePage() {
+  const [activeTab, setActiveTab] = useState<'personal' | 'addresses' | 'notifications'>('personal');
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+
+  // States
+  const [personalData, setPersonalData] = useState({
+    name: '',
+    email: '',
+    phone: ''
+  });
+
+  const [addresses, setAddresses] = useState<Address[]>([]);
+
+  const [notifications, setNotifications] = useState({
+    emailQuotes: true,
+    emailMessages: true,
+    emailPromos: false
+  });
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    setLoading(true);
+    const token = sessionStorage.getItem('authToken');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/client/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Error fetching profile');
+      const data = await res.json();
+      
+      setPersonalData({
+        name: data.user?.fullName || '',
+        email: data.user?.email || '',
+        phone: data.user?.phone || ''
+      });
+
+      if (data.profile?.addresses) {
+        try {
+          const parsedAddresses = data.profile.addresses.map((a: string) => JSON.parse(a));
+          setAddresses(parsedAddresses);
+        } catch (e) {
+          console.error('Error parsing addresses', e);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    const token = sessionStorage.getItem('authToken');
+    if (!token) return;
+
+    try {
+      const adrsStrings = addresses.map(a => JSON.stringify(a));
+      const res = await fetch(`${API_URL}/client/profile`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          fullName: personalData.name,
+          phone: personalData.phone,
+          addresses: adrsStrings
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al guardar los datos');
+      
+      setSuccessMsg('¡Datos guardados correctamente!');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error desconocido');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddAddress = () => {
+    const newId = Date.now().toString();
+    setAddresses([...addresses, { 
+      id: newId, 
+      name: 'Nueva Dirección', 
+      address: '', 
+      city: 'Quito', 
+      isDefault: addresses.length === 0 
+    }]);
+  };
+
+  const handleDeleteAddress = (id: string) => {
+    setAddresses(addresses.filter(a => a.id !== id));
+  };
+
+  const updateAddress = (id: string, field: keyof Address, value: any) => {
+    setAddresses(addresses.map(a => a.id === id ? { ...a, [field]: value } : a));
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-28 flex justify-center items-start">
+        <Loader2 className="w-10 h-10 animate-spin text-[#101828]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8 flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-black text-[#101828] mb-2">Mi Perfil</h1>
+            <p className="text-gray-500 text-lg">Gestiona tu información personal, direcciones y preferencias.</p>
+          </div>
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="hidden md:flex bg-[#101828] hover:bg-[#202c44] text-white font-bold py-2.5 px-6 rounded-lg transition-colors items-center gap-2"
+          >
+            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+            Guardar todo
+          </button>
+        </div>
+
+        {/* Notificaciones */}
+        {errorMsg && (
+          <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-2 font-medium">
+            <AlertCircle className="w-5 h-5" /> {errorMsg}
+          </div>
+        )}
+        {successMsg && (
+           <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 font-medium animate-in fade-in duration-300">
+             <CheckCircle className="w-5 h-5" /> {successMsg}
+           </div>
+        )}
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
+          
+          {/* Sidebar Navigation */}
+          <div className="w-full md:w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-2 flex-shrink-0">
+            <button
+              onClick={() => setActiveTab('personal')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeTab === 'personal' ? 'bg-[#FFCA0C] text-[#101828]' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <User className="w-5 h-5" />
+              Datos personales
+            </button>
+            <button
+              onClick={() => setActiveTab('addresses')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeTab === 'addresses' ? 'bg-[#FFCA0C] text-[#101828]' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <MapPin className="w-5 h-5" />
+              Direcciones
+            </button>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeTab === 'notifications' ? 'bg-[#FFCA0C] text-[#101828]' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Bell className="w-5 h-5" />
+              Notificaciones
+            </button>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 p-6 sm:p-8">
+            
+            {/* Tab: Personal Data */}
+            {activeTab === 'personal' && (
+              <div className="animate-in fade-in duration-300">
+                <h2 className="text-2xl font-bold text-[#101828] mb-6">Datos Personales</h2>
+                <div className="space-y-6 max-w-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
+                    <input 
+                      type="text" 
+                      value={personalData.name}
+                      onChange={(e) => setPersonalData({...personalData, name: e.target.value})}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#FFCA0C] focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                    <input 
+                      type="email" 
+                      value={personalData.email}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 bg-gray-50 text-gray-500 cursor-not-allowed"
+                      disabled
+                    />
+                    <p className="text-xs text-gray-500 mt-1">El correo no puede modificarse. Contacta a soporte si necesitas cambiarlo.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono móvil</label>
+                    <input 
+                      type="tel" 
+                      value={personalData.phone}
+                      onChange={(e) => setPersonalData({...personalData, phone: e.target.value})}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#FFCA0C] focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div className="pt-4 md:hidden border-t border-gray-100">
+                    <button 
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="w-full bg-[#101828] hover:bg-[#202c44] text-white font-bold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                      Guardar cambios
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Addresses */}
+            {activeTab === 'addresses' && (
+              <div className="animate-in fade-in duration-300">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-[#101828]">Direcciones</h2>
+                  <button 
+                    onClick={handleAddAddress}
+                    className="text-[#101828] font-semibold flex items-center gap-1.5 hover:text-[#FFCA0C] transition-colors text-sm bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-md"
+                  >
+                    <Plus className="w-4 h-4" /> Nueva
+                  </button>
+                </div>
+                
+                <p className="text-gray-500 mb-6">Tener tus direcciones preguardadas agiliza tus futuras solicitudes de servicios.</p>
+
+                <div className="space-y-4">
+                  {addresses.map((addr) => (
+                    <div key={addr.id} className="border border-gray-200 rounded-lg p-5 hover:border-[#FFCA0C] transition-colors relative group bg-white shadow-sm">
+                      {addr.isDefault && (
+                        <span className="absolute top-4 right-4 bg-[#FFCA0C]/20 text-[#8B6B00] text-xs font-bold px-2.5 py-1 rounded-full">
+                          Principal
+                        </span>
+                      )}
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                        <div>
+                           <label className="text-xs text-gray-500 font-medium">Nombre (Ej: Casa, Oficina)</label>
+                           <input 
+                             type="text"
+                             value={addr.name}
+                             onChange={(e) => updateAddress(addr.id, 'name', e.target.value)}
+                             className="w-full mt-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-[#FFCA0C] focus:border-transparent outline-none" 
+                           />
+                        </div>
+                        <div>
+                           <label className="text-xs text-gray-500 font-medium">Ciudad</label>
+                           <input 
+                             type="text"
+                             value={addr.city}
+                             onChange={(e) => updateAddress(addr.id, 'city', e.target.value)}
+                             className="w-full mt-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-[#FFCA0C] focus:border-transparent outline-none" 
+                           />
+                        </div>
+                        <div className="sm:col-span-2">
+                           <label className="text-xs text-gray-500 font-medium">Dirección completa</label>
+                           <input 
+                             type="text"
+                             value={addr.address}
+                             onChange={(e) => updateAddress(addr.id, 'address', e.target.value)}
+                             className="w-full mt-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-[#FFCA0C] focus:border-transparent outline-none" 
+                           />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4 mt-4 items-center justify-between border-t border-gray-100 pt-3">
+                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-600">
+                          <input 
+                             type="checkbox" 
+                             checked={addr.isDefault}
+                             onChange={(e) => {
+                               // Si se marca como default, desmarcar los demás
+                               if (e.target.checked) {
+                                 setAddresses(addresses.map(a => ({...a, isDefault: a.id === addr.id})));
+                               } else {
+                                 updateAddress(addr.id, 'isDefault', false);
+                               }
+                             }}
+                             className="text-[#FFCA0C] focus:ring-[#FFCA0C]" 
+                          /> 
+                          Dirección principal
+                        </label>
+                        
+                        <button 
+                          onClick={() => handleDeleteAddress(addr.id)}
+                          className="text-sm text-red-600 font-medium hover:underline flex items-center gap-1"
+                        >
+                          <Trash2 className="w-4 h-4" /> Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {addresses.length === 0 && (
+                    <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                      <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">No tienes direcciones guardadas.</p>
+                      <button onClick={handleAddAddress} className="mt-3 text-[#101828] font-bold underline">Añadir una ahora</button>
+                    </div>
+                  )}
+
+                  <div className="pt-4 md:hidden">
+                    <button 
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="w-full bg-[#101828] hover:bg-[#202c44] text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      Guardar cambios
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Notifications */}
+            {activeTab === 'notifications' && (
+              <div className="animate-in fade-in duration-300">
+                <h2 className="text-2xl font-bold text-[#101828] mb-6">Notificaciones</h2>
+                <p className="text-gray-500 mb-8">Elige qué tipo de correos quieres recibir de ArtoCamello.</p>
+
+                <div className="space-y-6 max-w-lg">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-[#101828]">Nuevos presupuestos recibidos</h3>
+                      <p className="text-sm text-gray-500 mt-1">Te avisaremos cuando un profesional responda a tu solicitud con un precio.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer"
+                        checked={notifications.emailQuotes}
+                        onChange={() => setNotifications({...notifications, emailQuotes: !notifications.emailQuotes})}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FFCA0C]"></div>
+                    </label>
+                  </div>
+
+                  <div className="w-full h-px bg-gray-100"></div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-[#101828]">Mensajes de chat</h3>
+                      <p className="text-sm text-gray-500 mt-1">Notificaciones cuando un profesional te escriba por el chat interno.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer"
+                        checked={notifications.emailMessages}
+                        onChange={() => setNotifications({...notifications, emailMessages: !notifications.emailMessages})}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FFCA0C]"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-8 md:hidden">
+                    <button 
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="w-full bg-[#101828] text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      Guardar cambios
+                    </button>
+                  </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

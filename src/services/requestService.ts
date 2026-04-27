@@ -1,0 +1,115 @@
+// ====================================================================
+// ArtoCamello — Request Service (Real API Integration)
+// ====================================================================
+import {
+  ServiceRequest, RequestStatus, UrgencyLevel,
+} from '../domain/types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+function getAuthToken(): string | null {
+  return sessionStorage.getItem('authToken');
+}
+
+// --- Payloads ---
+export interface CreateRequestPayload {
+  categorySlug: string;
+  title: string;
+  description: string;
+  location: string;
+  urgency: UrgencyLevel;
+  preferredDate?: string;
+  contactPhone: string;
+  contactEmail: string;
+  estimatedBudget: number; // Presupuesto estimado del trabajo en USD (requerido)
+}
+
+
+// --- Service Functions ---
+
+/**
+ * Create a new service request from a client.
+ */
+export async function createServiceRequest(payload: CreateRequestPayload): Promise<ServiceRequest> {
+  const token = getAuthToken();
+  if (!token) throw new Error('No autorizado');
+
+  const response = await fetch(`${API_URL}/requests`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al crear la petición');
+  }
+
+  return response.json();
+}
+
+/**
+ * List all requests created by the authenticated client.
+ */
+export async function listRequestsByClient(clientId: string): Promise<ServiceRequest[]> {
+  const token = getAuthToken();
+  if (!token) return [];
+
+  const response = await fetch(`${API_URL}/requests/client`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!response.ok) return [];
+  return response.json();
+}
+
+/**
+ * List requests available for the authenticated professional to purchase.
+ */
+export async function listMatchingRequestsForProfessional(professionalId: string): Promise<ServiceRequest[]> {
+  const token = getAuthToken();
+  if (!token) return [];
+
+  const response = await fetch(`${API_URL}/requests/available`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!response.ok) return [];
+  return response.json();
+}
+
+/**
+ * Get a single request by ID. (Not fully implemented yet)
+ */
+export async function getRequestById(requestId: string): Promise<ServiceRequest | null> {
+  // Not yet implemented in Express API
+  return null;
+}
+
+/**
+ * Cancel a service request. (Not fully implemented yet)
+ */
+export async function cancelRequest(requestId: string): Promise<ServiceRequest | null> {
+  // Not yet implemented in Express API
+  return null;
+}
+
+/**
+ * Mark a request as completed. (Not fully implemented yet)
+ */
+export async function completeRequest(requestId: string): Promise<ServiceRequest | null> {
+   // Not yet implemented in Express API
+   return null;
+}
+
+/**
+ * Get all requests. (Not fully implemented yet)
+ */
+export async function listAllRequests(): Promise<ServiceRequest[]> {
+  return [];
+}

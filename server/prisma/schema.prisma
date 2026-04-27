@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================================================================
+// Modelos alineados con domain/types.ts
+// ====================================================================
+
+enum UserRole {
+  client
+  pro
+  guest
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  password            String?
+  authProvider        String               @default("local") // "local" o "google"
+  role                UserRole             @default(client)
+  fullName            String
+  phone               String?
+  avatarUrl           String?
+  emailVerified       Boolean              @default(false)
+  verificationToken   String?              @unique
+  createdAt           DateTime             @default(now())
+  
+  // Relaciones uno a uno hacia los perfiles dependiendo del rol
+  clientProfile       ClientProfile?
+  professionalProfile ProfessionalProfile?
+  
+  // Relación hacia los ServiceRequests que creó (si es cliente)
+  serviceRequests     ServiceRequest[]
+
+  // Relaciones de Reseñas
+  reviewsMade         Review[]             @relation("ClientReviews")
+  reviewsReceived     Review[]             @relation("ProfessionalReviews")
+}
+
+model ClientProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  addresses           String[]
+  preferredCategories String[]
+}
+
+model ProfessionalProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  businessName    String?
+  bio             String   @db.Text
+  categories      String[]
+  serviceZones    String[]
+  experienceYears Int      @default(0)
+  skills          String[]
+  city            String?
+  address         String?
+  documentType    String?
+  documentId      String?
+  portfolioImages String[]
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0)
+  verified        Boolean  @default(false)
+  completedJobs   Int      @default(0)
+  
+  leadPurchases   LeadPurchase[]
+}
+
+// ====================================================================
+// LEADS & PAGOS DIRECTOS (Sin sistema de créditos)
+// ====================================================================
+
+enum RequestStatus {
+  draft
+  submitted
+  matching
+  contact_limit_open
+  contact_limit_reached
+  quotes_received
+  hired
+  completed
+  cancelled
+}
+
+enum UrgencyLevel {
+  low
+  medium
+  high
+}
+
+model ServiceRequest {
+  id              String         @id @default(uuid())
+  clientId        String
+  client          User           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  categorySlug    String
+  title           String
+  description     String         @db.Text
+  location        String
+  urgency         UrgencyLevel   @default(low)
+  preferredDate   DateTime?
+  status          RequestStatus  @default(draft)
+  contactPhone    String
+  contactEmail    String
+  estimatedBudget Float          @default(0) // Presupuesto estimado en USD ingresado por el cliente
+  purchaseCount   Int            @default(0)
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  leadPurchases   LeadPurchase[]
+}
+
+enum LeadPurchaseStatus {
+  pending    // Intención creada, esperando pago
+  paid       // Pago confirmado, contacto desbloqueado
+  failed     // El pago falló o caducó
+}
+
+model LeadPurchase {
+  id                     String               @id @default(uuid())
+  requestId              String
+  request                ServiceRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  professionalId         String
+  professional           ProfessionalProfile  @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  
+  costUSD                Float                // Costo final en USD cobrado al profesional
+  status                 LeadPurchaseStatus   @default(pending)
+  
+  // PayPhone tracking
+  payphoneTransactionId  String?              // ID de la transacción en PayPhone
+  payphoneClientTxId     String?              @unique // Nuestro ID único enviado a PayPhone (para callback)
+  
+  purchasedAt            DateTime             @default(now())
+  paidAt                 DateTime?            // Cuando se confirmó el pago
+  
+  @@unique([requestId, professionalId])
+}
+
+model Review {
+  id              String   @id @default(uuid())
+  rating          Int
+  comment         String   @db.Text
+  createdAt       DateTime @default(now())
+  
+  clientId        String
+  client          User     @relation("ClientReviews", fields: [clientId], references: [id], onDelete: Cascade)
+  
+  professionalId  String
+  professional    User     @relation("ProfessionalReviews", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+}
