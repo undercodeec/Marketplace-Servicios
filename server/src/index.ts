@@ -89,7 +89,7 @@ app.post('/api/auth/register', async (req: Request, res: Response): Promise<void
       return newUser;
     });
 
-    const verificationLink = `http://localhost:5173/verify?token=${verificationToken}`;
+    const verificationLink = `${APP_BASE_URL}/verify?token=${verificationToken}`;
     try {
       await transporter.sendMail({
         from: `"ArtoCamello Cuentas" <${process.env.SMTP_USER}>`,
