@@ -26,7 +26,8 @@ export function VerifyEmail() {
 
     const verifyToken = async () => {
       try {
-        const response = await fetch(`http://localhost:3000/api/auth/verify?token=${token}`);
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
         if (!response.ok) {
            const errData = await response.json();
            throw new Error(errData.error || 'Autenticación fallida al verificar');
