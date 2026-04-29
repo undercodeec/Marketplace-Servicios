@@ -437,7 +437,7 @@ app.get('/api/requests/available', authenticateToken, async (req: AuthRequest, r
     const requests = await prisma.serviceRequest.findMany({
       where: {
         status: { in: ['contact_limit_open', 'matching'] },
-        purchaseCount: { lt: 4 },
+        purchaseCount: { lt: 6 },
         leadPurchases: {
           none: { professionalId: realProfId },
         },
@@ -497,8 +497,8 @@ app.post('/api/leads/pay', authenticateToken, async (req: AuthRequest, res: Resp
       res.status(400).json({ error: 'Esta solicitud fue cancelada.' });
       return;
     }
-    if (request.purchaseCount >= 4) {
-      res.status(400).json({ error: 'Límite de 4 profesionales alcanzado para esta solicitud.' });
+    if (request.purchaseCount >= 6) {
+      res.status(400).json({ error: 'Límite de 6 profesionales alcanzado para esta solicitud.' });
       return;
     }
 
@@ -685,7 +685,7 @@ app.post('/api/leads/pay/confirm', authenticateToken, async (req: AuthRequest, r
       // Incrementar contador de compras en la solicitud
       const newCount = purchase.request.purchaseCount + 1;
       let newStatus = purchase.request.status;
-      if (newCount >= 4) newStatus = 'contact_limit_reached';
+      if (newCount >= 6) newStatus = 'contact_limit_reached';
 
       await tx.serviceRequest.update({
         where: { id: purchase.requestId },
@@ -793,6 +793,232 @@ app.get('/api/payments/history', authenticateToken, async (req: AuthRequest, res
   } catch (error) {
     console.error('Error in /api/payments/history:', error);
     res.status(500).json({ error: 'Error al obtener el historial de pagos' });
+  }
+});
+
+// ====================================================================
+// RUTAS DE COTIZACIONES (QUOTES)
+// ====================================================================
+
+/**
+ * POST /api/quotes
+ * Crear/Enviar una cotización. El profesional debe haber pagado por el lead.
+ */
+app.post('/api/quotes', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { requestId, message, estimatedPrice, estimatedDays } = req.body;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: { professionalProfile: true },
+    });
+    if (user?.role !== 'pro' || !user.professionalProfile) {
+      res.status(403).json({ error: 'Solo profesionales pueden enviar cotizaciones.' });
+      return;
+    }
+    const realProfId = user.professionalProfile.id;
+
+    // Verificar si ya compró este lead y está pagado
+    const purchase = await prisma.leadPurchase.findUnique({
+      where: { requestId_professionalId: { requestId, professionalId: realProfId } },
+    });
+    if (!purchase || purchase.status !== 'paid') {
+      res.status(403).json({ error: 'Debes desbloquear el contacto primero.' });
+      return;
+    }
+
+    // Upsert quote
+    const quote = await prisma.quote.upsert({
+      where: {
+        requestId_professionalId: { requestId, professionalId: realProfId }
+      },
+      update: {
+        message,
+        estimatedPrice: parseFloat(estimatedPrice),
+        estimatedDays: estimatedDays ? parseInt(estimatedDays) : null,
+      },
+      create: {
+        requestId,
+        professionalId: realProfId,
+        message,
+        estimatedPrice: parseFloat(estimatedPrice),
+        estimatedDays: estimatedDays ? parseInt(estimatedDays) : null,
+      }
+    });
+
+    res.status(200).json(quote);
+  } catch (error) {
+    console.error('Error in POST /api/quotes:', error);
+    res.status(500).json({ error: 'Error al enviar cotización.' });
+  }
+});
+
+/**
+ * GET /api/quotes/request/:id
+ * Listar cotizaciones recibidas para una solicitud del cliente.
+ */
+app.get('/api/quotes/request/:id', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    
+    // Verificar que la solicitud pertenezca al cliente actual
+    const request = await prisma.serviceRequest.findUnique({ where: { id } });
+    if (!request || request.clientId !== req.user!.userId) {
+      res.status(403).json({ error: 'No tienes acceso a esta solicitud.' });
+      return;
+    }
+
+    const quotes = await prisma.quote.findMany({
+      where: { requestId: id },
+      include: {
+        professional: {
+          include: { user: true }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const formatted = quotes.map(q => ({
+      quote: {
+        id: q.id,
+        requestId: q.requestId,
+        professionalId: q.professionalId,
+        message: q.message,
+        estimatedPrice: q.estimatedPrice,
+        estimatedDays: q.estimatedDays,
+        status: q.status,
+        createdAt: q.createdAt,
+      },
+      professionalName: q.professional.user.fullName,
+      professionalRating: q.professional.rating,
+      professionalReviewCount: q.professional.reviewCount,
+      professionalAvatar: q.professional.user.avatarUrl,
+    }));
+
+    res.status(200).json(formatted);
+  } catch (error) {
+    console.error('Error in GET /api/quotes/request:', error);
+    res.status(500).json({ error: 'Error al obtener cotizaciones.' });
+  }
+});
+
+/**
+ * GET /api/quotes/me
+ * Listar todas las cotizaciones enviadas por el profesional autenticado.
+ */
+app.get('/api/quotes/me', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: { professionalProfile: true },
+    });
+    if (user?.role !== 'pro' || !user.professionalProfile) {
+      res.status(403).json({ error: 'Solo profesionales pueden acceder a sus cotizaciones.' });
+      return;
+    }
+
+    const quotes = await prisma.quote.findMany({
+      where: { professionalId: user.professionalProfile.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.status(200).json(quotes);
+  } catch (error) {
+    console.error('Error in GET /api/quotes/me:', error);
+    res.status(500).json({ error: 'Error al obtener cotizaciones enviadas.' });
+  }
+});
+
+/**
+ * POST /api/quotes/:id/accept
+ * El cliente acepta una cotización.
+ */
+app.post('/api/quotes/:id/accept', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    
+    const quote = await prisma.quote.findUnique({
+      where: { id },
+      include: { request: true }
+    });
+
+    if (!quote || quote.request.clientId !== req.user!.userId) {
+      res.status(403).json({ error: 'No tienes permisos.' });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Marcar la aceptada
+      await tx.quote.update({
+        where: { id },
+        data: { status: 'accepted' }
+      });
+
+      // Rechazar las demás
+      await tx.quote.updateMany({
+        where: { requestId: quote.requestId, id: { not: id } },
+        data: { status: 'rejected' }
+      });
+
+      // Actualizar request
+      await tx.serviceRequest.update({
+        where: { id: quote.requestId },
+        data: { status: 'hired', updatedAt: new Date() }
+      });
+    });
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error in POST /api/quotes/accept:', error);
+    res.status(500).json({ error: 'Error al aceptar cotización.' });
+  }
+});
+
+// ====================================================================
+// RUTAS DE PETICIONES (CANCELAR Y COMPLETAR)
+// ====================================================================
+
+app.post('/api/requests/:id/cancel', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const request = await prisma.serviceRequest.findUnique({ where: { id } });
+    
+    if (!request || request.clientId !== req.user!.userId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    const updated = await prisma.serviceRequest.update({
+      where: { id },
+      data: { status: 'cancelled', updatedAt: new Date() }
+    });
+    
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Error canceling request', error);
+    res.status(500).json({ error: 'Error al cancelar' });
+  }
+});
+
+app.post('/api/requests/:id/complete', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const request = await prisma.serviceRequest.findUnique({ where: { id } });
+    
+    if (!request || request.clientId !== req.user!.userId) {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
+
+    const updated = await prisma.serviceRequest.update({
+      where: { id },
+      data: { status: 'completed', updatedAt: new Date() }
+    });
+    
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Error completing request', error);
+    res.status(500).json({ error: 'Error al completar' });
   }
 });
 

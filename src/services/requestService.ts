@@ -92,19 +92,35 @@ export async function getRequestById(requestId: string): Promise<ServiceRequest 
 }
 
 /**
- * Cancel a service request. (Not fully implemented yet)
+ * Cancel a service request.
  */
 export async function cancelRequest(requestId: string): Promise<ServiceRequest | null> {
-  // Not yet implemented in Express API
-  return null;
+  const token = getAuthToken();
+  if (!token) throw new Error('No autorizado');
+
+  const response = await fetch(`${API_URL}/requests/${requestId}/cancel`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!response.ok) return null;
+  return response.json();
 }
 
 /**
- * Mark a request as completed. (Not fully implemented yet)
+ * Mark a request as completed.
  */
 export async function completeRequest(requestId: string): Promise<ServiceRequest | null> {
-   // Not yet implemented in Express API
-   return null;
+  const token = getAuthToken();
+  if (!token) throw new Error('No autorizado');
+
+  const response = await fetch(`${API_URL}/requests/${requestId}/complete`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!response.ok) return null;
+  return response.json();
 }
 
 /**

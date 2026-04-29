@@ -73,6 +73,7 @@ model ProfessionalProfile {
   completedJobs   Int      @default(0)
   
   leadPurchases   LeadPurchase[]
+  quotes          Quote[]
 }
 
 // ====================================================================
@@ -118,6 +119,7 @@ model ServiceRequest {
   updatedAt       DateTime       @updatedAt
   
   leadPurchases   LeadPurchase[]
+  quotes          Quote[]
 }
 
 enum LeadPurchaseStatus {
@@ -160,4 +162,31 @@ model Review {
   professional    User     @relation("ProfessionalReviews", fields: [professionalId], references: [id], onDelete: Cascade)
 
   @@index([professionalId])
+}
+
+// ====================================================================
+// COTIZACIONES (QUOTES)
+// ====================================================================
+
+enum QuoteStatus {
+  sent
+  accepted
+  rejected
+}
+
+model Quote {
+  id              String         @id @default(uuid())
+  requestId       String
+  request         ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  professionalId  String
+  professional    ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  
+  message         String         @db.Text
+  estimatedPrice  Float
+  estimatedDays   Int?
+  status          QuoteStatus    @default(sent)
+  createdAt       DateTime       @default(now())
+  
+  @@unique([requestId, professionalId])
 }

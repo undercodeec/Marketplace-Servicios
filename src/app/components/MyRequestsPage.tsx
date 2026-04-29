@@ -23,28 +23,40 @@ export function MyRequestsPage() {
     loadRequests();
   }, []);
 
-  const loadRequests = () => {
+  const loadRequests = async () => {
     if (auth.userId) {
-      const reqs = listRequestsByClient(auth.userId);
-      setRequests(reqs);
-      // Pre-load quotes for requests that have them
-      const qMap: Record<string, ReturnType<typeof listQuotesByRequest>> = {};
-      reqs.forEach(r => {
-        const quotes = listQuotesByRequest(r.id);
-        if (quotes.length > 0) qMap[r.id] = quotes;
-      });
-      setQuotesMap(qMap);
+      try {
+        const reqs = await listRequestsByClient(auth.userId);
+        setRequests(reqs);
+        // Pre-load quotes for requests that have them
+        const qMap: any = {};
+        await Promise.all(
+          reqs.map(async (r) => {
+            try {
+              const quotes = await listQuotesByRequest(r.id);
+              if (quotes && quotes.length > 0) {
+                qMap[r.id] = quotes;
+              }
+            } catch (err) {
+              console.error(`Error loading quotes for request ${r.id}:`, err);
+            }
+          })
+        );
+        setQuotesMap(qMap);
+      } catch (error) {
+        console.error("Failed to load requests:", error);
+      }
     }
   };
 
-  const handleCancelRequest = (id: string) => {
-    cancelRequest(id);
+  const handleCancelRequest = async (id: string) => {
+    await cancelRequest(id);
     setCancelModalOpen(null);
     loadRequests();
   };
 
-  const handleAcceptQuote = (quoteId: string) => {
-    acceptQuote(quoteId);
+  const handleAcceptQuote = async (quoteId: string) => {
+    await acceptQuote(quoteId);
     loadRequests();
   };
 
@@ -81,7 +93,7 @@ export function MyRequestsPage() {
             <p className="text-gray-500 text-lg">Haz seguimiento al estado de los trabajos que has solicitado.</p>
           </div>
           <Link
-            to="/"
+            to="/search"
             className="bg-[#FFCA0C] hover:bg-[#e6b600] text-[#101828] font-bold py-3 px-6 rounded-lg transition-colors inline-flex items-center gap-2"
           >
             + Nueva solicitud
@@ -93,7 +105,7 @@ export function MyRequestsPage() {
             <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-[#101828] mb-2">Aún no tienes solicitudes</h3>
             <p className="text-gray-500 mb-6">Cuando solicites un presupuesto, aparecerá aquí.</p>
-            <Link to="/" className="inline-block bg-[#FFCA0C] hover:bg-[#e6b600] text-[#101828] font-bold py-3 px-6 rounded-lg transition-colors">
+            <Link to="/search" className="inline-block bg-[#FFCA0C] hover:bg-[#e6b600] text-[#101828] font-bold py-3 px-6 rounded-lg transition-colors">
               Solicitar presupuesto gratis
             </Link>
           </div>

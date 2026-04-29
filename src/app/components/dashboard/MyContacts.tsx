@@ -8,6 +8,8 @@ import { ServiceRequest, UrgencyLevel, URGENCY_LABELS } from '@/domain/types';
 import { MAX_PROFESSIONALS_PER_REQUEST } from '@/domain/constants';
 import { listMatchingRequestsForProfessional } from '@/services/requestService';
 import { initiateLeadPayment, listUnlockedContacts, UnlockedContact } from '@/services/leadService';
+import { submitQuote, listQuotesByProfessional } from '@/services/quoteService';
+import { Quote } from '@/domain/types';
 import { getCurrentAuth } from '@/services/authService';
 import { getCategoryBySlug } from '@/services/categoryService';
 
@@ -180,9 +182,27 @@ function InboxCard({ job, isLoading, error, onPay }: InboxCardProps) {
 
 // ─── Sub-component: Unlocked Contact Card ─────────────────────────────────────
 
-function UnlockedCard({ contact, index, total }: { contact: UnlockedContact; index: number; total: number }) {
-  const [notesValue, setNotesValue] = useState('');
+function UnlockedCard({ contact, index, total, quote, onSubmitQuote }: { contact: UnlockedContact; index: number; total: number; quote?: Quote; onSubmitQuote: (p: any) => Promise<void> }) {
+  const [message, setMessage] = useState('');
+  const [price, setPrice] = useState<number | ''>('');
+  const [days, setDays] = useState<number | ''>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isLast = index === total - 1;
+
+  const handleSubmit = async () => {
+    if (!message || price === '' || days === '') {
+      alert('Por favor completa todos los campos de la cotización.');
+      return;
+    }
+    setIsSubmitting(true);
+    await onSubmitQuote({
+      requestId: contact.purchase.requestId,
+      message,
+      estimatedPrice: Number(price),
+      estimatedDays: Number(days)
+    });
+    setIsSubmitting(false);
+  };
 
   return (
     <div className={`p-6 flex flex-col md:flex-row gap-6 ${!isLast ? 'border-b border-gray-100' : ''}`}>
@@ -258,21 +278,76 @@ function UnlockedCard({ contact, index, total }: { contact: UnlockedContact; ind
         </div>
       </div>
 
-      {/* Private notes */}
-      <div className="w-full md:w-64 flex flex-col gap-2">
-        <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Notas privadas</label>
-        <textarea
-          className="w-full flex-1 min-h-[100px] p-3 border border-gray-200 rounded-xl focus:outline-none focus:border-[#101828] focus:ring-1 focus:ring-[#101828]/20 bg-white text-sm resize-none transition-colors"
-          placeholder="Anota detalles del cliente, presupuesto acordado, fecha..."
-          value={notesValue}
-          onChange={(e) => setNotesValue(e.target.value)}
-        />
-        <button
-          id={`btn-save-notes-${contact.purchase.id}`}
-          className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg transition-colors"
-        >
-          Guardar nota
-        </button>
+      {/* Quote UI */}
+      <div className="w-full md:w-80 flex flex-col gap-3 bg-white p-4 border border-gray-200 rounded-xl shadow-sm">
+        <label className="text-xs font-bold text-[#101828] uppercase tracking-wide border-b border-gray-100 pb-2">
+          {quote ? 'Cotización Enviada' : 'Enviar Cotización'}
+        </label>
+        
+        {quote ? (
+          <div className="space-y-3">
+            <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
+              {quote.message}
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">Precio estimado:</span>
+              <span className="font-bold text-[#101828]">${quote.estimatedPrice} USD</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">Tiempo estimado:</span>
+              <span className="font-medium text-gray-700">{quote.estimatedDays} días</span>
+            </div>
+            <div className="mt-2 text-center">
+              <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                {quote.status === 'accepted' ? '¡Cotización Aceptada!' : 'Enviada al cliente'}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <textarea
+                className="w-full min-h-[80px] p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#101828] focus:ring-1 focus:ring-[#101828]/20 bg-white text-sm resize-none transition-colors"
+                placeholder="Describe tu propuesta y experiencia..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  placeholder="Precio"
+                  className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#101828]"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value ? Number(e.target.value) : '')}
+                />
+              </div>
+              <div className="flex-1 relative">
+                <input
+                  type="number"
+                  placeholder="Días"
+                  className="w-full pl-2 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#101828]"
+                  value={days}
+                  onChange={(e) => setDays(e.target.value ? Number(e.target.value) : '')}
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">días</span>
+              </div>
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${
+                isSubmitting 
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-[#FFCA0C] hover:bg-[#e6b600] text-[#101828]'
+              }`}
+            >
+              {isSubmitting ? 'Enviando...' : 'Enviar Propuesta'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -294,6 +369,7 @@ export function MyContacts() {
 
   // Unlocked contacts (already paid)
   const [unlockedContacts, setUnlockedContacts] = useState<UnlockedContact[]>([]);
+  const [myQuotes, setMyQuotes] = useState<Quote[]>([]);
   const [unlockedLoading, setUnlockedLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -302,15 +378,17 @@ export function MyContacts() {
     setInboxLoading(true);
     setUnlockedLoading(true);
 
-    const [available, unlocked] = await Promise.all([
+    const [available, unlocked, sentQuotes] = await Promise.all([
       listMatchingRequestsForProfessional(auth.userId),
       listUnlockedContacts(auth.userId),
+      listQuotesByProfessional(),
     ]);
 
     // Filter out already-purchased from inbox
     const unlockedRequestIds = new Set(unlocked.map((u) => u.purchase.requestId));
     setInboxJobs(available.filter((j) => !unlockedRequestIds.has(j.id)));
     setUnlockedContacts(unlocked);
+    setMyQuotes(sentQuotes);
 
     setInboxLoading(false);
     setUnlockedLoading(false);
@@ -319,6 +397,15 @@ export function MyContacts() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleQuoteSubmit = async (payload: any) => {
+    try {
+      const newQuote = await submitQuote(payload);
+      setMyQuotes(prev => [...prev, newQuote]);
+    } catch (err: any) {
+      alert(err.message || 'Error al enviar cotización');
+    }
+  };
 
   const handlePay = async (jobId: string) => {
     setPayingId(jobId);
@@ -519,6 +606,8 @@ export function MyContacts() {
                   contact={contact}
                   index={i}
                   total={filteredUnlocked.length}
+                  quote={myQuotes.find(q => q.requestId === contact.purchase.requestId)}
+                  onSubmitQuote={handleQuoteSubmit}
                 />
               ))}
             </div>

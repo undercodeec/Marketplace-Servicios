@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, Globe } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import { Link } from 'react-router';
 import { SignUpModal } from './SignUpModal';
 import { POPULAR_SERVICES } from '../constants/services';
@@ -9,6 +9,8 @@ export function Header() {
   const [initialModalView, setInitialModalView] = useState<'login' | 'signup'>('signup');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userType, setUserType] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileServicesOpen, setIsMobileServicesOpen] = useState(false);
 
   const checkAuth = () => {
     const authStatus = sessionStorage.getItem('isAuthenticated') === 'true';
@@ -34,6 +36,7 @@ export function Header() {
   const openModal = (view: 'login' | 'signup') => {
     setInitialModalView(view);
     setIsSignUpModalOpen(true);
+    setIsMobileMenuOpen(false); // Close mobile menu when opening modal
   };
 
   const serviceColumns = [
@@ -44,10 +47,10 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-white z-50 border-b border-gray-200 h-20">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full bg-white relative z-20">
         <div className="flex justify-between items-center h-full">
           <div className="flex-shrink-0 flex items-center gap-6">
-            <Link to="/" className="text-3xl font-black tracking-tighter text-[#404145]">
+            <Link to="/" className="text-3xl font-black tracking-tighter text-[#404145]" onClick={() => setIsMobileMenuOpen(false)}>
               ArtoCamello<span className="text-[#FFCA0C]">.</span>
             </Link>
           </div>
@@ -125,6 +128,102 @@ export function Header() {
               </button>
             )}
           </nav>
+          
+          {/* Mobile Menu Toggle Button */}
+          <div className="lg:hidden flex items-center">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 -mr-2 text-[#404145] hover:text-[#FFCA0C] focus:outline-none transition-colors"
+              aria-label="Toggle mobile menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-7 h-7" />
+              ) : (
+                <Menu className="w-7 h-7" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Mobile Navigation Menu */}
+      <div 
+        className={`lg:hidden absolute top-20 left-0 right-0 bg-white border-b border-gray-200 shadow-xl overflow-y-auto transition-all duration-300 ease-in-out z-10 ${
+          isMobileMenuOpen ? 'max-h-[calc(100vh-5rem)] opacity-100 visible' : 'max-h-0 opacity-0 invisible'
+        }`}
+      >
+        <div className="px-6 py-8 space-y-6">
+          <div className="space-y-4">
+            <button 
+              onClick={() => setIsMobileServicesOpen(!isMobileServicesOpen)}
+              className="flex items-center justify-between w-full text-left text-[#404145] font-semibold text-xl border-b border-gray-100 pb-2"
+            >
+              Servicios 
+              <ChevronDown className={`w-5 h-5 transition-transform duration-200 ${isMobileServicesOpen ? 'rotate-180 text-[#FFCA0C]' : ''}`} />
+            </button>
+            
+            {/* Mobile Services Submenu */}
+            <div className={`pl-2 space-y-3 overflow-hidden transition-all duration-300 ${isMobileServicesOpen ? 'max-h-[1000px] opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+               <Link to="/search" onClick={() => setIsMobileMenuOpen(false)} className="block text-[#404145] font-medium py-1">Ver todos los servicios</Link>
+               {POPULAR_SERVICES.slice(0, 8).map((item, idx) => (
+                 <Link 
+                   key={idx}
+                   to={item.slug ? `/search?c=${item.slug}` : '/search'} 
+                   onClick={() => setIsMobileMenuOpen(false)}
+                   className="block text-[#62646A] py-1 hover:text-[#FFCA0C]"
+                 >
+                   {item.label}
+                 </Link>
+               ))}
+            </div>
+
+            <Link to="/pro" onClick={() => setIsMobileMenuOpen(false)} className="block text-[#404145] font-semibold text-xl border-b border-gray-100 pb-2">
+              ¿Eres un profesional?
+            </Link>
+            
+            {isAuthenticated && userType !== 'pro' && (
+              <>
+                <Link to="/mis-solicitudes" onClick={() => setIsMobileMenuOpen(false)} className="block text-[#404145] font-semibold text-xl border-b border-gray-100 pb-2">
+                  Mis Solicitudes
+                </Link>
+                <Link to="/mi-perfil" onClick={() => setIsMobileMenuOpen(false)} className="block text-[#404145] font-semibold text-xl border-b border-gray-100 pb-2">
+                  Mi Perfil
+                </Link>
+              </>
+            )}
+          </div>
+          
+          <div className="pt-6 flex flex-col gap-4">
+            {!isAuthenticated ? (
+              <>
+                <button 
+                  onClick={() => openModal('login')}
+                  className="w-full text-center text-[#62646A] font-semibold text-lg py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Iniciar sesión
+                </button>
+                <button 
+                  onClick={() => openModal('signup')}
+                  className="w-full text-center bg-[#FFCA0C] text-black font-semibold text-lg py-3 rounded-md hover:bg-[#e6b60b] transition-colors"
+                >
+                  Unete
+                </button>
+              </>
+            ) : (
+              <button 
+                onClick={() => {
+                  sessionStorage.removeItem('isAuthenticated');
+                  sessionStorage.removeItem('userType');
+                  sessionStorage.removeItem('userEmail');
+                  window.dispatchEvent(new Event('auth-status-changed'));
+                  window.location.href = '/';
+                }}
+                className="w-full text-center text-red-500 font-semibold text-lg py-3 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+              >
+                Cerrar sesión
+              </button>
+            )}
+          </div>
         </div>
       </div>
       

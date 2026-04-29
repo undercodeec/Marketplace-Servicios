@@ -1,6 +1,5 @@
 import image_e6aa9405774d6957f43b873b5534c79308047b9d from 'figma:asset/e6aa9405774d6957f43b873b5534c79308047b9d.png'
 import React from 'react';
-import exampleImage from 'figma:asset/ac607f282acc2cb39be6a7b6c0eaf5ab77eff6f3.png';
 
 export function ProCTA() {
   return (
@@ -41,15 +40,6 @@ export function ProCTA() {
                  right: '0px',    // Mueve la imagen de lado a lado. 
                  // left: '20px', // (Opcional) Puedes usar left en lugar de right si lo prefieres
                }}
-             />
-          </div>
-          
-          {/* Mobile Image */}
-          <div className="md:hidden w-full flex justify-center mt-10 z-0 relative h-[280px]">
-             <img 
-               src={exampleImage} 
-               alt="Profesionales" 
-               className="h-full w-auto object-contain object-bottom"
              />
           </div>
 
