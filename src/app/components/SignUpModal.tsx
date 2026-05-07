@@ -150,18 +150,21 @@ export function SignUpModal({ isOpen, onClose, initialView = 'signup' }: SignUpM
       <div className="absolute inset-0" onClick={onClose} />
       
       {/* Modal Container */}
-      <div className="relative w-full max-w-[850px] bg-white rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-[850px] max-h-[100dvh] sm:max-h-[90dvh] bg-white sm:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Close button */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors"
+          className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 hover:bg-gray-200 text-gray-500 transition-colors backdrop-blur-sm shadow-sm"
           aria-label="Cerrar"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M13 1L1 13M1 1L13 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
+
+        {/* Scrollable content wrapper */}
+        <div className="flex flex-col md:flex-row w-full h-full overflow-y-auto overflow-x-hidden">
 
         {/* Left Panel - Dark Red Background */}
         <div className="w-full md:w-[45%] bg-[#FFCA0C] flex flex-col relative overflow-hidden shrink-0">
@@ -375,6 +378,7 @@ export function SignUpModal({ isOpen, onClose, initialView = 'signup' }: SignUpM
           <p className="mt-8 text-[13px] text-gray-500 leading-relaxed">
             Al unirte, aceptas los <a href="#" className="text-[#1DBF73] hover:underline font-medium">Términos de servicio</a> de ArtoCamello, así como recibir correos electrónicos ocasionales de nuestra parte. Lee nuestra <a href="#" className="text-[#1DBF73] hover:underline font-medium">Política de privacidad</a> para saber cómo utilizamos tus datos personales.
           </p>
+        </div>
         </div>
       </div>
     </div>
