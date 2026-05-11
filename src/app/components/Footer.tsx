@@ -2,6 +2,7 @@ import React from 'react';
 import { Twitter, Facebook, Linkedin, Instagram } from 'lucide-react';
 import { Link } from 'react-router';
 import { POPULAR_SERVICES } from '../constants/services';
+import logoArtocamello from '@/assets/logoartocamello.png';
 
 export function Footer() {
   // Link map for plain-string links → destinations
@@ -93,7 +94,7 @@ export function Footer() {
 
         <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4 text-[#74767e]">
-            <span className="text-2xl font-black tracking-tighter text-[#74767e]">ArtoCamello<span className="text-gray-400">.</span></span>
+            <img src={logoArtocamello} alt="ArtoCamello" style={{ height: '75px', width: 'auto', objectFit: 'contain' }} />
             <span className="text-sm">© ArtoCamello {new Date().getFullYear()}</span>
           </div>
 
